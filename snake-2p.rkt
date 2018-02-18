@@ -1,6 +1,6 @@
 #lang racket
 
-(require 2htdp/image 2htdp/universe)
+(require 2htdp/image 2htdp/universe lens)
 
 ;; STRUCTS
 
@@ -14,14 +14,14 @@
 
 ;; CONSTANTS
 
-(define TICK-RATE 1/20)
+(define TICK-RATE 1/5)
 (define SNAKE-SIZE 10)
 ;;(define POWER-UP-TIMER-RANGE (pair 5 15))
 ;;(define MAX-POWER-UPS 3)
 (define BOARD-WIDTH (* SNAKE-SIZE 80))
 (define BOARD-HEIGHT (* SNAKE-SIZE 60))
 (define EMPTY-SCENE (empty-scene BOARD-WIDTH BOARD-HEIGHT))
-(define SNAKE-STARTING-LENGTH 100)
+(define SNAKE-STARTING-LENGTH 200)
 
 (define PLAYER1-KEYS (list "w" "a" "s" "d"))
 (define PLAYER2-KEYS (list "up" "right" "down" "left"))
@@ -66,8 +66,8 @@
 ;; MAIN
 
 (define (start)
-  (define p1-snake (snake 'right (list (pair 10 30)) "blue" SNAKE-STARTING-LENGTH PLAYER1-KEYS))
-  (define p2-snake (snake 'left  (list (pair 70 30)) "red" SNAKE-STARTING-LENGTH PLAYER2-KEYS))
+  (define p1-snake (snake 'right (list (pair 1 1)) "blue" SNAKE-STARTING-LENGTH PLAYER1-KEYS))
+  (define p2-snake (snake 'left  (list (pair 10 10)) "red" SNAKE-STARTING-LENGTH PLAYER2-KEYS))
   ;; (define p1
   ;;(define p3-snake (snake 'down  (list (pair 40 10)) 'none "yellow" SNAKE-STARTING-LENGTH))
   ;;(define p4-snake (snake 'up  (list (pair 40 50)) 'none "green" SNAKE-STARTING-LENGTH))
@@ -151,12 +151,21 @@
 
 (define foldor (λ (v l) (or v l)))
 
+(define (is-outside? x a b)
+  (or (< x a) (> x b)))
+
+(define (snakes-outside-board? snakes)
+  (define (snake-outside-board? s)
+    (define head (first (snake-body s)))
+    (or (is-outside? (* (pair-x head) SNAKE-SIZE) 0 BOARD-WIDTH)
+        (is-outside? (* (pair-y head) SNAKE-SIZE) 0 BOARD-HEIGHT)))
+  (foldr foldor false (map snake-outside-board? snakes)))
+
 (define (snake-collided-self? s)
   (define body (snake-body s))
   (define head (first body))
   (define tail (rest body))
-  (cond [(empty? tail) #f]
-        [else (snake-collided-with-body? head tail)]))
+  (snake-collided-with-body? head tail))
 
 (define (snakes-collided-each-other? snakes)
   (define (snake-collided-with-other? s)
@@ -167,8 +176,9 @@
 
 (define (collision? w)
   (define snakes (game-snakes w))
-  (or (foldr foldor false (map snake-collided-self? snakes)))
-      (snakes-collided-each-other? snakes))
+  (or (foldr foldor false (map snake-collided-self? snakes))
+      (snakes-collided-each-other? snakes)
+      (snakes-outside-board? snakes)))
   
 (define (manage-end w)
   (game-scene w))
