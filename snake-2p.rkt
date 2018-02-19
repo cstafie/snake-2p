@@ -1,111 +1,110 @@
 #lang racket
-
 (require 2htdp/image 2htdp/universe lens)
 
 ;; STRUCTS
-
-(struct pair (x y) #:transparent)
-(struct game (snakes power-up-manger scene keys) #:transparent)
-;;(struct player (snake keys color))
-(struct snake (direction body color length keys) #:transparent)
-;;(struct power-up-manager (timer-range max-power-ups power-ups) #:transparent)
-;;(struct poker-up (name location) #:transparent)
-;;(struct fps-counter (frames last-time) #:transparent) ;curious about building an fps counter
+(struct/lens pair (x y) #:transparent)
+(struct/lens game (snakes scene) #:transparent)
+(struct/lens snake (direction body color length keys inputs) #:transparent)
 
 ;; CONSTANTS
-
 (define TICK-RATE 1/5)
 (define SNAKE-SIZE 10)
-;;(define POWER-UP-TIMER-RANGE (pair 5 15))
-;;(define MAX-POWER-UPS 3)
 (define BOARD-WIDTH (* SNAKE-SIZE 80))
 (define BOARD-HEIGHT (* SNAKE-SIZE 60))
 (define EMPTY-SCENE (empty-scene BOARD-WIDTH BOARD-HEIGHT))
-(define SNAKE-STARTING-LENGTH 200)
+(define EMPTY-KEYS empty)
+(define EMPTY-SNAKE (snake empty empty empty empty empty empty))
+(define SNAKE-STARTING-LENGTH 10)
 
+;; KEY CONSTANTS
 (define PLAYER1-KEYS (list "w" "a" "s" "d"))
 (define PLAYER2-KEYS (list "up" "right" "down" "left"))
 (define KEYS (append PLAYER1-KEYS PLAYER2-KEYS))
-(define DIRECTION-TO-VALUE (list (pair 'up (pair 0 -1))
-                                 (pair 'right (pair 1 0))
-                                 (pair 'down (pair 0 1))
-                                 (pair 'left (pair -1 0))))
-(define KEY-TO-DIRECTION (list (pair "up" 'up)
-                               (pair "right" 'right)
-                               (pair "down" 'down)
-                               (pair "left" 'left)
-                               (pair "w" 'up)
-                               (pair "d" 'right)
-                               (pair "s" 'down)
-                               (pair "a" 'left)))
-(define OPPOSITE-DIRECTION (list (pair 'up 'down)
-                                 (pair 'down 'up)
-                                 (pair 'left 'right)
-                                 (pair 'right 'left)))
 
-(define EMPTY-SNAKE (snake empty empty empty empty empty))
+;(define KEY-SETS
+;  (hash
+;   'wasd (list "w" "a" "s" "d")
+;   'arrow-keys (list "up" "right" "down" "left")))
 
-;; HELPERS
+;;DIRECTIONS AND KEYS
+(define DIRECTION-TO-VALUE
+  (hash
+   'up    (pair 0 -1)
+   'right (pair 1 0)
+   'down  (pair 0 1)
+   'left  (pair -1 0)))
+(define KEY-TO-DIRECTION
+  (hash "up"    'up
+        "right" 'right
+        "down"  'down
+        "left"  'left
+        "w"     'up
+        "d"     'right
+        "s"     'down
+        "a"     'left))
 
-(define (get-val key dict)
-  (pair-y (first (filter (λ (x) (equal? key (pair-x x))) dict))))
+;; PAIR HELPERS
+(define (add-pair a b)
+  (pair (+ (pair-x a) (pair-x b)) (+ (pair-y a) (pair-y b))))
 
 ;; DIRECTION HELPERS
+(define (opposite-directions? d1 d2)
+  (equal? (add-pair
+           (hash-ref DIRECTION-TO-VALUE d1)
+           (hash-ref DIRECTION-TO-VALUE d2))
+          (pair 0 0)))
 
-(define (opposite-direction? d1 d2)
-  (equal? (get-val d1 OPPOSITE-DIRECTION) d2))
-
-(define (direction? d)
-  (member d KEYS))
+(define (key? d) (member d KEYS))
 
 (define (location+direction loc dir)
-  (define val (get-val dir DIRECTION-TO-VALUE))
-  (pair (+ (pair-x loc) (pair-x val))
-        (+ (pair-y loc) (pair-y val))))
+  (define val (hash-ref DIRECTION-TO-VALUE dir))
+  (add-pair loc val))
+
+;; SNAKE HELPERS
+(define (snake-empty? s) (empty? (snake-body s)))
+
+;; RENDER HELPERS
+(define (render-square color x y scene)
+  (place-image
+   (square SNAKE-SIZE "solid" color)
+   (* x SNAKE-SIZE)
+   (* y SNAKE-SIZE)
+   scene))
 
 ;; MAIN
-
 (define (start)
-  (define p1-snake (snake 'right (list (pair 1 1)) "blue" SNAKE-STARTING-LENGTH PLAYER1-KEYS))
-  (define p2-snake (snake 'left  (list (pair 10 10)) "red" SNAKE-STARTING-LENGTH PLAYER2-KEYS))
-  ;; (define p1
-  ;;(define p3-snake (snake 'down  (list (pair 40 10)) 'none "yellow" SNAKE-STARTING-LENGTH))
-  ;;(define p4-snake (snake 'up  (list (pair 40 50)) 'none "green" SNAKE-STARTING-LENGTH))
-  ;;(define pum (power-up-manager POWER-UP-TIMER-RANGE MAX-POWER-UPS '()))
-  
+  (define snakes
+    (list
+     (snake 'right (list (pair 10 30)) "blue" SNAKE-STARTING-LENGTH PLAYER1-KEYS)
+     (snake 'left  (list (pair 70 30)) "red" SNAKE-STARTING-LENGTH PLAYER2-KEYS)
+     ;;(snake 'down  (list (pair 40 10)) "yellow" SNAKE-STARTING-LENGTH PLAYER1-KEYS)
+     ;;(snake 'up    (list (pair 40 50)) "green" SNAKE-STARTING-LENGTH PLAYER2-KEYS)
+     ))
   (big-bang
-    (game (list p1-snake p2-snake) empty EMPTY-SCENE empty)
+      (game snakes EMPTY-SCENE EMPTY-KEYS)
     (on-tick update-game TICK-RATE)
     (on-key manage-inputs)
     (to-draw render-game)
     (stop-when game-over? manage-end)))
 
 ;; RENDER
-
 (define (render-game w)
-  (render-snakes (game-snakes w) (game-scene w)))
+  (render-snakes (game-snakes w)))
 
-(define (render-snakes snakes scene)
-  (define (render-snake snake)
-    (define (render-snake-piece piece)
-      (set! scene (place-image
-                   (square SNAKE-SIZE "solid" (snake-color snake))
-                   (* (pair-x piece) SNAKE-SIZE)
-                   (* (pair-y piece) SNAKE-SIZE)
-                   scene)))
-    ;(println (snake-body snake))
-    (map render-snake-piece (snake-body snake)))
-  (map render-snake snakes)
-  scene)
+(define (render-snakes snakes)
+  (define (render-snake s scene)
+    (cond [(snake-empty? s) scene]
+          [else
+           (define piece (first (snake-body s)))
+           (render-snake
+            (lens-set snake-body-lens s (rest (snake-body s)))
+            (render-square (snake-color s) (pair-x piece) (pair-y piece) scene))]))
+  (foldr (λ (v scene) (render-snake v scene)) EMPTY-SCENE snakes))
 
 ;; UPDATE
 
 (define (update-game w)
-  (game
-   (move-snakes (direct-snakes (game-snakes w) (game-keys w)))
-   empty
-   (game-scene w)
-   empty))
+  (lens-set game-snakes-lens w ((compose move-snakes direct-snakes) (game-snakes w))))
 
 (define (direct-snakes snakes keys)
   (define (direct-snake s)
@@ -113,9 +112,11 @@
     (define relevant-keys (filter (λ (k) (member k (snake-keys s))) keys))
     (define next-direction
       (cond [(empty? relevant-keys) current-direction]
-            [else (get-val (last relevant-keys) KEY-TO-DIRECTION)]))
-    (cond [(opposite-direction? current-direction next-direction) s]
-          [else (snake next-direction (snake-body s) (snake-color s) (snake-length s) (snake-keys s))]))
+            [else (hash-ref KEY-TO-DIRECTION (first relevant-keys))]))
+    (cond [(opposite-directions? current-direction next-direction) s]
+          [else (lens-set snake-direction-lens s next-direction)]))
+
+  
   (map direct-snake snakes))
 
 (define (move-snakes snakes)
@@ -136,9 +137,15 @@
 ;; INPUTS
   
 (define (manage-inputs w key)
-  (cond [(direction? key) (game (game-snakes w) empty (game-scene w) (cons key (game-keys w)))]
-        [else w]))
-  ;;(game (direct-snakes (game-snakes w) key) empty (game-scene w)))
+  (lens-set game-snakes-lens w
+    (foldr
+     (λ (s l) (cons (lens-set snake-inputs-lens s (append (snake-inputs s) key)) l))
+     empty
+     (game-snakes w))))
+     
+;  (cond [(key? key) (game (game-snakes w) (game-scene w) (cons key (game-keys w)))]
+;        [else w]))
+;;(game (direct-snakes (game-snakes w) key) empty (game-scene w)))
 
 ;; END
 
