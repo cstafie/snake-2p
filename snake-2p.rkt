@@ -3,17 +3,15 @@
 
 ;; STRUCTS
 (struct/lens pair (x y) #:transparent)
-(struct/lens game (snakes scene) #:transparent)
+(struct/lens game (snakes) #:transparent)
 (struct/lens snake (direction body color length keys inputs) #:transparent)
 
 ;; CONSTANTS
-(define TICK-RATE 1/5)
+(define TICK-RATE 1/40)
 (define SNAKE-SIZE 5)
 (define BOARD-WIDTH 160)
 (define BOARD-HEIGHT 120)
-(define GAME-WIDTH (* SNAKE-SIZE BOARD-WIDTH))
-(define GAME-HEIGHT (* SNAKE-SIZE BOARD-HEIGHT))
-(define EMPTY-SCENE (empty-scene GAME-WIDTH GAME-HEIGHT))
+(define EMPTY-SCENE (empty-scene (* SNAKE-SIZE BOARD-WIDTH) (* SNAKE-SIZE BOARD-HEIGHT)))
 (define MAX-KEY-QUE-LENGTH 5)
 (define SNAKE-STARTING-LENGTH 30)
 
@@ -24,9 +22,8 @@
 (define PLAYER2-START (pair (sub1 BOARD-WIDTH) (/ BOARD-HEIGHT 2)))
 (define PLAYER3-KEYS (list "i" "j" "k" "l"))
 (define PLAYER3-START (pair (/ BOARD-WIDTH 2) 1))
-(define KEYS (append PLAYER1-KEYS PLAYER2-KEYS))
 
-;;DIRECTIONS AND KEYS
+;; DIRECTIONS AND KEYS
 (define DIRECTION-TO-VALUE
   (hash
    'up    (pair 0 -1)
@@ -69,8 +66,6 @@
            (hash-ref DIRECTION-TO-VALUE d2))
           (pair 0 0)))
 
-(define (key? d) (member d KEYS))
-
 (define (location+direction loc dir)
   (define val (hash-ref DIRECTION-TO-VALUE dir))
   (pair+ loc val))
@@ -93,7 +88,7 @@
      ;(snake 'up    (list (pair 40 50)) "yellow" SNAKE-STARTING-LENGTH PLAYER2-KEYS empty)
      ))
   (big-bang
-      (game (take snakes (min players (length snakes))) EMPTY-SCENE)
+      (game (take snakes (min players (length snakes))))
     (on-tick update-game TICK-RATE)
     (on-key manage-inputs)
     (to-draw render-game)
@@ -157,8 +152,8 @@
 (define (snakes-outside-board? snakes)
   (define (snake-outside-board? s)
     (define head (first (snake-body s)))
-    (or (is-outside? (* (pair-x head) SNAKE-SIZE) 0 GAME-WIDTH)
-        (is-outside? (* (pair-y head) SNAKE-SIZE) 0 GAME-HEIGHT)))
+    (or (is-outside? (pair-x head) 0 BOARD-WIDTH)
+        (is-outside? (pair-y head) 0 BOARD-HEIGHT)))
   (foldr foldor false (map snake-outside-board? snakes)))
 
 (define (snake-collided-self? s)
@@ -176,4 +171,4 @@
       (snakes-outside-board? snakes)))
   
 (define (manage-end w)
-  (game-scene w))
+  (render-snakes (game-snakes w)))
