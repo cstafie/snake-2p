@@ -2,9 +2,9 @@
 (require 2htdp/image 2htdp/universe lens)
 
 ;; STRUCTS
-(struct/lens pair (x y) #:transparent)
-(struct/lens game (snakes) #:transparent)
-(struct/lens snake (direction body color length keys inputs) #:transparent)
+(struct/lens pair [x y] #:transparent)
+(struct/lens game [snakes] #:transparent)
+(struct/lens snake [direction body color length keys inputs] #:transparent)
 
 ;; CONSTANTS
 (define TICK-RATE 1/40)
@@ -13,13 +13,13 @@
 (define BOARD-HEIGHT 120)
 (define EMPTY-SCENE (empty-scene (* SNAKE-SIZE BOARD-WIDTH) (* SNAKE-SIZE BOARD-HEIGHT)))
 (define MAX-KEY-QUE-LENGTH 5)
-(define SNAKE-STARTING-LENGTH 30)
+(define SNAKE-STARTING-LENGTH 3000)
 
 ;; KEY CONSTANTS
 (define PLAYER1-KEYS (list "w" "a" "s" "d"))
-(define PLAYER1-START (pair 1 (/ BOARD-HEIGHT 2)))
+(define PLAYER1-START (pair (/ BOARD-WIDTH  10) (/ BOARD-HEIGHT 2)))
 (define PLAYER2-KEYS (list "up" "right" "down" "left"))
-(define PLAYER2-START (pair (sub1 BOARD-WIDTH) (/ BOARD-HEIGHT 2)))
+(define PLAYER2-START (pair  (- BOARD-WIDTH  (/ BOARD-WIDTH  10)) (/ BOARD-HEIGHT 2)))
 (define PLAYER3-KEYS (list "i" "j" "k" "l"))
 (define PLAYER3-START (pair (/ BOARD-WIDTH 2) 1))
 
@@ -34,6 +34,24 @@
   (hash "up" 'up "right" 'right "down" 'down "left" 'left
         "w" 'up "d" 'right "s" 'down "a" 'left
         "i" 'up "l" 'right "k" 'down "j" 'left))
+
+;; MAIN
+(define (start players)
+  (define snakes
+    (list
+     (snake 'right (list PLAYER1-START) "blue" SNAKE-STARTING-LENGTH PLAYER1-KEYS empty)
+     (snake 'left  (list PLAYER2-START) "red" SNAKE-STARTING-LENGTH PLAYER2-KEYS empty)
+     (snake 'down  (list PLAYER3-START) "green" SNAKE-STARTING-LENGTH PLAYER3-KEYS empty)
+     ;(snake 'up    (list (pair 40 50)) "yellow" SNAKE-STARTING-LENGTH PLAYER2-KEYS empty)
+     ))
+  (big-bang
+      (game (take snakes (min players (length snakes))))
+    (on-tick update-game TICK-RATE)
+    (on-key manage-inputs)
+    (to-draw render-game)
+    (stop-when game-over? manage-end)
+    (close-on-stop 1)
+  ))
 
 ;; PAIR HELPERS
 (define (pair+ a b)
@@ -78,22 +96,6 @@
    (* y SNAKE-SIZE)
    scene))
 
-;; MAIN
-(define (start players)
-  (define snakes
-    (list
-     (snake 'right (list PLAYER1-START) "blue" SNAKE-STARTING-LENGTH PLAYER1-KEYS empty)
-     (snake 'left  (list PLAYER2-START) "red" SNAKE-STARTING-LENGTH PLAYER2-KEYS empty)
-     (snake 'down  (list PLAYER3-START) "green" SNAKE-STARTING-LENGTH PLAYER3-KEYS empty)
-     ;(snake 'up    (list (pair 40 50)) "yellow" SNAKE-STARTING-LENGTH PLAYER2-KEYS empty)
-     ))
-  (big-bang
-      (game (take snakes (min players (length snakes))))
-    (on-tick update-game TICK-RATE)
-    (on-key manage-inputs)
-    (to-draw render-game)
-    (stop-when game-over? manage-end)))
-
 ;; RENDER
 (define (render-game w)
   (render-snakes (game-snakes w)))
@@ -107,7 +109,7 @@
            (render-snake
             (lens-set snake-body-lens s (rest (snake-body s)))
             (render-square (snake-color s) (pair-x piece) (pair-y piece) scene))]))
-  (foldr (λ (v scene) (render-snake v scene)) EMPTY-SCENE snakes))
+  (foldr render-snake EMPTY-SCENE snakes))
 
 ;; UPDATE
 
