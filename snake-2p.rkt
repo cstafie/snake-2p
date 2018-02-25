@@ -1,9 +1,9 @@
 #lang racket
-(require 2htdp/image 2htdp/universe lens)
+(require 2htdp/image 2htdp/universe lens "./fps.rkt")
 
 ;; STRUCTS
 (struct/lens pair [x y] #:transparent)
-(struct/lens game [snakes] #:transparent)
+(struct/lens game [snakes scene] #:transparent)
 (struct/lens snake [direction body color length keys inputs] #:transparent)
 
 ;; CONSTANTS
@@ -13,7 +13,7 @@
 (define BOARD-HEIGHT 120)
 (define EMPTY-SCENE (empty-scene (* SNAKE-SIZE BOARD-WIDTH) (* SNAKE-SIZE BOARD-HEIGHT)))
 (define MAX-KEY-QUE-LENGTH 5)
-(define SNAKE-STARTING-LENGTH 3000)
+(define SNAKE-STARTING-LENGTH 10)
 
 ;; KEY CONSTANTS
 (define PLAYER1-KEYS (list "w" "a" "s" "d"))
@@ -50,8 +50,7 @@
     (on-key manage-inputs)
     (to-draw render-game)
     (stop-when game-over? manage-end)
-    (close-on-stop 1)
-  ))
+    (close-on-stop 1)))
 
 ;; PAIR HELPERS
 (define (pair+ a b)
@@ -98,10 +97,9 @@
 
 ;; RENDER
 (define (render-game w)
-  (render-snakes (game-snakes w)))
+  (add-fps (render-snakes (game-snakes w))))
 
 (define (render-snakes snakes)
-  ;(println (snake-inputs (first snakes)))
   (define (render-snake s scene)
     (cond [(empty? (snake-body s)) scene]
           [else
