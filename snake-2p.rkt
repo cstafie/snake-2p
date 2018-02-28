@@ -1,21 +1,24 @@
 #lang racket
-(require 2htdp/image 2htdp/universe lens "./fps.rkt")
+(require 2htdp/image 2htdp/universe lens)
+(require "./fps.rkt")
+;(require profile profile/render-text)
 
 ;; STRUCTS
 (struct/lens posn [x y] #:transparent)
 (struct/lens img-posn [img posn] #:transparent)
-(struct/lens game [snakes scene] #:transparent)
+(struct/lens game [snakes img] #:transparent)
 (struct/lens snake [direction body color length keys inputs] #:transparent)
 
 ;; CONSTANTS
-(define TICK-RATE 1/40)
+(define TICK-RATE 1/30)
 (define SNAKE-SIZE 5)
 (define BOARD-WIDTH 160)
 (define BOARD-HEIGHT 120)
+(define BG-COLOR "white")
 (define EMPTY-SCENE (empty-scene (* SNAKE-SIZE BOARD-WIDTH) (* SNAKE-SIZE BOARD-HEIGHT)))
+(define EMPTY-BOARD-IMAGE (rectangle (* SNAKE-SIZE BOARD-WIDTH) (* SNAKE-SIZE BOARD-HEIGHT) "solid" BG-COLOR))
 (define MAX-KEY-QUE-LENGTH 5)
 (define SNAKE-STARTING-LENGTH 10)
-(define BG-COLOR "white")
 
 ;; KEY CONSTANTS
 (define PLAYER1-KEYS (list "w" "a" "s" "d"))
@@ -46,11 +49,11 @@
      (snake 'down  (list PLAYER3-START) "green" SNAKE-STARTING-LENGTH PLAYER3-KEYS empty)
      ;(snake 'up    (list (posn 40 50)) "yellow" SNAKE-STARTING-LENGTH PLAYER2-KEYS empty)
      ))
-  (big-bang (game (take snakes (min players (length snakes))) EMPTY-SCENE)
+  (big-bang (game (take snakes (min players (length snakes))) EMPTY-BOARD-IMAGE)
     (on-tick update-game TICK-RATE)
     (on-key manage-inputs)
     (to-draw render-game)
-    (stop-when game-over? manage-end)
+    (stop-when game-over? render-game) ;(stop-when (λ (x) #f) render-game)
     (name "Sssnek")
     (close-on-stop 1)))
 
@@ -62,10 +65,8 @@
   (posn (+ (posn-x a) (posn-x b)) (+ (posn-y a) (posn-y b))))
 
 ;; SNAKE HELPERS
-(define (snake-head s)
-  (first (snake-body s)))
-(define (snake-tail s)
-  (rest (snake-body s)))
+(define (snake-head s) (first (snake-body s)))
+(define (snake-tail s) (rest (snake-body s)))
 
 (define (snake-next-direction s)
   (define current-direction (snake-direction s))
@@ -95,60 +96,38 @@
   (define val (hash-ref DIRECTION-TO-VALUE dir))
   (posn+ loc val))
 
-;; RENDER HELPERS
-(define (render-square color x y scene)
-  (place-image
-   (square SNAKE-SIZE "solid" color)
-   (* x SNAKE-SIZE)
-   (* y SNAKE-SIZE)
-   scene))
-
 ;; RENDER
 (define (render-game g)
-  (add-fps (game-scene g)))
-
-;(define (render-snakes snakes)
-;  (define (render-snake s scene)
-;    (cond [(empty? (snake-body s)) scene]
-;          [else
-;           (define piece (first (snake-body s)))
-;           (render-snake
-;            (lens-set snake-body-lens s (rest (snake-body s)))
-;            (render-square (snake-color s) (posn-x piece) (posn-y piece) scene))]))
-;  (foldr render-snake EMPTY-SCENE snakes))
+  (add-fps (place-image/align (game-img g) 0 0 "left" "top" EMPTY-SCENE)))
 
 ;; UPDATE
-
 (define (update-game g)
   (let* ([directed-snakes (direct-snakes (game-snakes g))]
-         [tail-img-posns (snake-tails directed-snakes)]
+         [remains-img-posns (snake-remains directed-snakes)]
          [moved-snakes (move-snakes directed-snakes)]
-         [img-posns (append (snake-heads moved-snakes) tail-img-posns)]
-         [new-scene (render-img-posns img-posns (game-scene g))])
-    (game moved-snakes new-scene)))
+         [img-posns (append (snake-heads moved-snakes) remains-img-posns)]
+         [new-game-img (render-img-posns img-posns (game-img g))])
+    (game moved-snakes new-game-img)))
 
-(define (snake-tails directed-snakes)
-  (define (snake-tail-img-posn s)
+(define (snake-remains directed-snakes)
+  (define (snake-remains-img-posn s)
     (cond [(equal? (length (snake-body s)) (snake-length s))
            (list (img-posn (square SNAKE-SIZE "solid" BG-COLOR) (last (snake-body s))))]
           [else empty]))
-  (foldr (λ (v l) (append (snake-tail-img-posn v) l)) empty directed-snakes))
+  (foldr (λ (v l) (append (snake-remains-img-posn v) l)) empty directed-snakes))
 
 (define (snake-heads moved-snakes)
   (define (snake-head-img-posn s)
     (img-posn (square SNAKE-SIZE "solid" (snake-color s)) (first (snake-body s))))
   (map snake-head-img-posn moved-snakes))
 
-(define (snake-img-posns snakes)
-  (append (snake-heads snakes) (snake-tails snakes)))
-
-(define (render-img-posns img-posns scene)
-  (define (render-img-posn ip s)
-    (place-image/align
-     (img-posn-img ip)
+(define (render-img-posns img-posns img)
+  (define (render-img-posn ip i)
+    (underlay/xy
+     i
      (* (img-posn-x ip) SNAKE-SIZE) (* (img-posn-y ip) SNAKE-SIZE)
-     "left" "top" s))
-  (foldr render-img-posn scene img-posns))
+     (img-posn-img ip)))
+  (freeze (foldr render-img-posn img img-posns)))
 
 (define (direct-snakes snakes)
   (define (direct-snake s)
@@ -202,5 +181,6 @@
   (or (foldr foldor false (map snake-collided-self? snakes))
       (snakes-collided-each-other? snakes)
       (snakes-outside-board? snakes)))
-  
-(define (manage-end g) (game-scene g))
+
+;; RUN
+(start 1)
